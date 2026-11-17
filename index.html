@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SPR测试">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>SPR 像素测试图生成器</title>
+<style>
+:root { color-scheme: dark; --bg:#101318; --panel:#1b212b; --line:#354052; --text:#eef3fa; --muted:#aab6c6; --accent:#65a9ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { width:min(100%,1000px); margin:auto; padding:14px; }
+h1 { font-size:21px; margin:4px 0 12px; }
+h2 { font-size:16px; margin:0 0 10px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px; margin:12px 0; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.field { min-width:0; display:flex; flex-direction:column; gap:4px; }
+label { color:var(--muted); font-size:13px; }
+input,select,button { font:inherit; }
+input[type=number],select { width:100%; min-height:40px; border:1px solid var(--line); border-radius:8px; padding:7px 9px; background:#111720; color:var(--text); }
+input[type=color] { width:100%; height:40px; border:1px solid var(--line); border-radius:8px; padding:3px; background:#111720; }
+input[type=checkbox] { width:18px; height:18px; vertical-align:middle; }
+button { border:1px solid var(--line); border-radius:9px; background:#27364a; color:var(--text); padding:10px 12px; cursor:pointer; }
+button.primary { background:#1769c2; border-color:#3989df; }
+button:active { transform:translateY(1px); }
+.colors { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+.colors button { padding:7px 10px; font-size:13px; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.note { color:var(--muted); font-size:12px; margin:8px 0 0; }
+.pattern-info { background:#111720; border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:10px; font-size:13px; color:#d5dfeb; }
+.checkline { display:flex; align-items:center; gap:8px; margin-top:10px; }
+#previewShell { background:#000; border:1px solid #4a5566; border-radius:9px; min-height:140px; padding:8px; overflow:auto; text-align:center; }
+#patternCanvas { display:block; margin:0 auto; image-rendering:pixelated; image-rendering:crisp-edges; max-width:none; }
+#status { color:#9dc7ff; font-size:13px; margin-top:8px; overflow-wrap:anywhere; }
+body.fullscreen #previewShell { border:0; border-radius:0; padding:0; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+body.fullscreen main { width:100%; padding:0; }
+body.fullscreen .hide-fullscreen { display:none !important; }
+@media(max-width:560px) { main { padding:10px; } .grid { gap:8px; } .panel { padding:11px; } h1 { font-size:19px; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="hide-fullscreen">
+    <h1>SPR 像素测试图生成器</h1>
+    <div class="panel">
+      <h2>1. 图片与颜色</h2>
+      <div class="grid">
+        <div class="field"><label for="imgW">图片宽度（像素）</label><input id="imgW" type="number" min="1" max="12000" value="1170"></div>
+        <div class="field"><label for="imgH">图片高度（像素）</label><input id="imgH" type="number" min="1" max="12000" value="2532"></div>
+        <div class="field"><label for="fg">图案颜色</label><input id="fg" type="color" value="#ffffff"></div>
+        <div class="field"><label for="bg">背景颜色</label><input id="bg" type="color" value="#000000"></div>
+      </div>
+      <div class="colors">
+        <button type="button" onclick="setFG('#ffffff')">白</button>
+        <button type="button" onclick="setFG('#ff0000')">R 红</button>
+        <button type="button" onclick="setFG('#00ff00')">G 绿</button>
+        <button type="button" onclick="setFG('#0000ff')">B 蓝</button>
+        <button type="button" onclick="setFG('#ffff00')">黄</button>
+        <button type="button" onclick="setFG('#00ffff')">青</button>
+        <button type="button" onclick="setFG('#ff00ff')">品红</button>
+        <button type="button" onclick="setFG('#000000')">黑</button>
+      </div>
+      <p class="note">颜色选择器支持自定义 RGB 颜色。PNG 按所填宽、高生成，不会对图案像素做放大或插值。</p>
+    </div>
+
+    <div class="panel">
+      <h2>2. 测试图类型</h2>
+      <div class="field">
+        <label for="pattern">选择单项图案，或生成全部组合图</label>
+        <select id="pattern" onchange="updatePatternInfo()">
+          <option value="p1">① 显示 1 像素（1×1，间隔 2 px）</option>
+          <option value="p2">② 显示 2×2 像素（间隔 2 px）</option>
+          <option value="h1">③ 横向 1 行，行间隔 1 px</option>
+          <option value="h2">④ 横向 1 行，行间隔 2 px</option>
+          <option value="b3">⑤ 显示 3×3 像素，间隔 3 px</option>
+          <option value="b4">⑥ 显示 4×4 像素，间隔 2 px</option>
+          <option value="v1">⑦ 竖向 1 列，列间隔 1 px</option>
+          <option value="v2">⑧ 竖向 1 列，列间隔 2 px</option>
+          <option value="v3">⑨ 竖向 2 列，列间隔 1 px</option>
+          <option value="v4">⑩ 竖向 2 列，列间隔 2 px</option>
+          <option value="all">★ 完整组合图：以上 10 类全部排列</option>
+          <option value="custom">自定义矩形像素块与间隔</option>
+        </select>
+      </div>
+      <div id="customControls" class="grid" style="display:none;margin-top:10px">
+        <div class="field"><label for="blockW">亮块宽度（px）</label><input id="blockW" type="number" min="1" value="1"></div>
+        <div class="field"><label for="blockH">亮块高度（px）</label><input id="blockH" type="number" min="1" value="1"></div>
+        <div class="field"><label for="gapX">横向暗间隔（px）</label><input id="gapX" type="number" min="0" value="1"></div>
+        <div class="field"><label for="gapY">纵向暗间隔（px）</label><input id="gapY" type="number" min="0" value="1"></div>
+      </div>
+      <div id="patternInfo" class="pattern-info"></div>
+      <div class="checkline" id="labelOption" style="display:none">
+        <input type="checkbox" id="withLabels" checked>
+        <label for="withLabels">组合图中显示每个区域的名称（会占用少量图像像素）</label>
+      </div>
+      <div class="actions">
+        <button class="primary" type="button" onclick="generate()">生成图案</button>
+        <button type="button" onclick="downloadPNG()">下载 PNG</button>
+        <button type="button" onclick="nativePreview()">按设备物理像素比例预览</button>
+        <button type="button" onclick="fitPreview()">适配屏幕预览</button>
+        <button type="button" onclick="toggleFullscreen()">全屏显示</button>
+      </div>
+      <p class="note">组合图按 10 个横向区域排列，每个区域一种图案。建议单项图用于严谨的像素级测试；组合图用于快速巡检和展示。</p>
+    </div>
+  </section>
+
+  <section class="panel hide-fullscreen" id="previewPanel">
+    <h2>3. 图案预览</h2>
+    <div id="previewShell"><canvas id="patternCanvas"></canvas></div>
+    <div id="status"></div>
+    <p class="note">预览缩放不改变下载 PNG 的实际像素。严格测试请使用“按设备物理像素比例预览”，关闭浏览器缩放，并确认图像尺寸与面板物理分辨率匹配。浏览器/系统仍可能进行显示缩放，建议先用像素映射测试验证。</p>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $('patternCanvas');
+const ctx = canvas.getContext('2d', { alpha:false });
+const patterns = [
+  {id:'p1', name:'① 显示 1 像素', type:'block', bw:1,bh:1,gx:2,gy:2,desc:'亮 1×1 px，横向暗间隔 2 px，纵向暗间隔 2 px。'},
+  {id:'p2', name:'② 显示 2×2 像素', type:'block', bw:2,bh:2,gx:2,gy:2,desc:'亮 2×2 px，横向暗间隔 2 px，纵向暗间隔 2 px。'},
+  {id:'h1', name:'③ 横向 1 行，间隔 1 px', type:'hline', bh:1,gy:1,desc:'亮 1 行，随后暗 1 行，周期 2 px。'},
+  {id:'h2', name:'④ 横向 1 行，间隔 2 px', type:'hline', bh:1,gy:2,desc:'亮 1 行，随后暗 2 行，周期 3 px。'},
+  {id:'b3', name:'⑤ 显示 3×3 像素，间隔 3 px', type:'block', bw:3,bh:3,gx:3,gy:3,desc:'亮 3×3 px，横向和纵向均暗 3 px。'},
+  {id:'b4', name:'⑥ 显示 4×4 像素，间隔 2 px', type:'block', bw:4,bh:4,gx:2,gy:2,desc:'亮 4×4 px，横向和纵向均暗 2 px。'},
+  {id:'v1', name:'⑦ 竖向 1 列，间隔 1 px', type:'vline', bw:1,gx:1,desc:'亮 1 列，随后暗 1 列，周期 2 px。'},
+  {id:'v2', name:'⑧ 竖向 1 列，间隔 2 px', type:'vline', bw:1,gx:2,desc:'亮 1 列，随后暗 2 列，周期 3 px。'},
+  {id:'v3', name:'⑨ 竖向 2 列，间隔 1 px', type:'vline', bw:2,gx:1,desc:'亮 2 列，随后暗 1 列，周期 3 px。'},
+  {id:'v4', name:'⑩ 竖向 2 列，间隔 2 px', type:'vline', bw:2,gx:2,desc:'亮 2 列，随后暗 2 列，周期 4 px。'}
+];
+
+let currentMode = 'fit';
+
+function setFG(c) { $('fg').value = c; }
+function updatePatternInfo() {
+  const id = $('pattern').value;
+  $('customControls').style.display = id === 'custom' ? 'grid' : 'none';
+  $('labelOption').style.display = id === 'all' ? 'flex' : 'none';
+  const p = patterns.find(x => x.id === id);
+  if (p) $('patternInfo').textContent = p.desc;
+  else if (id === 'all') $('patternInfo').textContent = '组合图包含以上 10 类：1×1、2×2、横向行间隔 1/2 px、3×3 间隔 3 px、4×4 间隔 2 px，以及竖向 1/2 列间隔 1/2 px。';
+  else $('patternInfo').textContent = '自定义亮块宽、高，以及横向/纵向暗间隔。所有数值均为 PNG 文件中的实际像素数。';
+}
+
+function getColors() {
+  return { fg:$('fg').value, bg:$('bg').value };
+}
+function getSize() {
+  const w = Math.floor(Number($('imgW').value));
+  const h = Math.floor(Number($('imgH').value));
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1 || w > 12000 || h > 12000) {
+    throw new Error('图片宽高必须为 1–12000 的整数像素。');
+  }
+  return {w,h};
+}
+function fillBackground(c, color) {
+  c.fillStyle = color;
+  c.fillRect(0,0,c.width,c.height);
+}
+function drawPatternRegion(c, x, y, w, h, p, fg, bg) {
+  c.save();
+  c.beginPath();
+  c.rect(x,y,w,h);
+  c.clip();
+  c.fillStyle = bg;
+  c.fillRect(x,y,w,h);
+  c.fillStyle = fg;
+
+  if (p.type === 'block') {
+    const sx = p.bw + p.gx, sy = p.bh + p.gy;
+    for (let yy=y; yy<y+h; yy+=sy) {
+      for (let xx=x; xx<x+w; xx+=sx) {
+        c.fillRect(xx, yy, p.bw, p.bh);
+      }
+    }
+  } else if (p.type === 'hline') {
+    const sy = p.bh + p.gy;
+    for (let yy=y; yy<y+h; yy+=sy) c.fillRect(x, yy, w, p.bh);
+  } else if (p.type === 'vline') {
+    const sx = p.bw + p.gx;
+    for (let xx=x; xx<x+w; xx+=sx) c.fillRect(xx, y, p.bw, h);
+  }
+  c.restore();
+}
+function generate() {
+  try {
+    const {w,h} = getSize();
+    const {fg,bg} = getColors();
+    const id = $('pattern').value;
+    canvas.width = w; canvas.height = h;
+    ctx.imageSmoothingEnabled = false;
+
+    if (id === 'all') {
+      const withLabels = $('withLabels').checked;
+      const labelH = withLabels ? Math.min(28, Math.max(16, Math.floor(h/30))) : 0;
+      const rowH = h / patterns.length;
+      patterns.forEach((p,i) => {
+        const y0 = Math.floor(i*rowH);
+        const y1 = Math.floor((i+1)*rowH);
+        const panelH = y1-y0;
+        if (withLabels && labelH > 0 && panelH > labelH) {
+          ctx.fillStyle = '#303b4a';
+          ctx.fillRect(0,y0,w,labelH);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `${Math.max(10,Math.min(18,labelH-5))}px sans-serif`;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.name, 8, y0 + labelH/2);
+          drawPatternRegion(ctx,0,y0+labelH,w,panelH-labelH,p,fg,bg);
+        } else {
+          drawPatternRegion(ctx,0,y0,w,panelH,p,fg,bg);
+        }
+        if (withLabels && i>0) {
+          ctx.fillStyle = '#777777';
+          ctx.fillRect(0,y0,w,1);
+        }
+      });
+      $('status').textContent = `已生成完整组合图：${w} × ${h} px；共 ${patterns.length} 个测试区域。`;
+    } else {
+      let p = patterns.find(x => x.id === id);
+      if (id === 'custom') {
+        const bw = Math.max(1,Math.floor(Number($('blockW').value)));
+        const bh = Math.max(1,Math.floor(Number($('blockH').value)));
+        const gx = Math.max(0,Math.floor(Number($('gapX').value)));
+        const gy = Math.max(0,Math.floor(Number($('gapY').value)));
+        if (![bw,bh,gx,gy].every(Number.isFinite)) throw new Error('自定义像素参数无效。');
+        p = {type:'block',bw,bh,gx,gy};
+      }
+      drawPatternRegion(ctx,0,0,w,h,p,fg,bg);
+      const desc = p.desc || `亮块 ${p.bw}×${p.bh} px；暗间隔 X=${p.gx} px、Y=${p.gy} px。`;
+      $('status').textContent = `已生成：${w} × ${h} px。${desc}`;
+    }
+    fitPreview();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+async function downloadPNG() {
+  if (!canvas.width || !canvas.height) generate();
+  const id = $('pattern').value;
+  const name = id === 'all' ? 'SPR_all_patterns' : (patterns.find(p=>p.id===id)?.id || 'SPR_custom');
+  const filename = `${name}_${canvas.width}x${canvas.height}.png`;
+  canvas.toBlob(async blob => {
+    if (!blob) { alert('PNG 导出失败，请重试。'); return; }
+    // iPhone/iPad: open the native share sheet so users can choose Save Image or Save to Files.
+    try {
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        await navigator.share({ files: [file], title: 'SPR 测试图' });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }, 'image/png');
+}
+function fitPreview() {
+  currentMode='fit';
+  const shell = $('previewShell');
+  const maxW = Math.max(80, shell.clientWidth-16);
+  const scale = Math.min(maxW/canvas.width, 1);
+  canvas.style.width = `${Math.max(1,Math.floor(canvas.width*scale))}px`;
+  canvas.style.height = `${Math.max(1,Math.floor(canvas.height*scale))}px`;
+}
+function nativePreview() {
+  currentMode='native';
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = `${canvas.width/dpr}px`;
+  canvas.style.height = `${canvas.height/dpr}px`;
+  $('status').textContent += ` 当前预览按 devicePixelRatio=${dpr} 设置 CSS 尺寸；请确认系统显示缩放和浏览器缩放为 100%。`;
+}
+async function toggleFullscreen() {
+  const shell = $('previewShell');
+  try {
+    if (!document.fullscreenElement) {
+      if (shell.requestFullscreen) await shell.requestFullscreen();
+      else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
+      else { alert('当前浏览器不支持网页全屏，请使用浏览器菜单进入全屏或隐藏地址栏。'); return; }
+      document.body.classList.add('fullscreen');
+    } else {
+      await document.exitFullscreen();
+      document.body.classList.remove('fullscreen');
+    }
+  } catch(e) {
+    alert('浏览器未允许全屏。可尝试使用浏览器菜单进入全屏显示。');
+  }
+}
+document.addEventListener('fullscreenchange',()=>{
+  if (!document.fullscreenElement) document.body.classList.remove('fullscreen');
+});
+window.addEventListener('resize',()=>{ if(currentMode==='fit' && canvas.width) fitPreview(); });
+
+updatePatternInfo();
+generate();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.warn('SPR PWA offline cache registration failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>

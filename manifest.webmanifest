@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "SPR 像素测试图生成器",
+  "short_name": "SPR测试",
+  "description": "用于生成单像素、像素块、横向行和竖向列的 SPR 屏幕测试图。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101318",
+  "theme_color": "#101318",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
